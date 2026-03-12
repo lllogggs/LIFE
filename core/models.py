@@ -13,3 +13,4 @@ class LifeRecord:
     summary: str
     payload: dict[str, Any]
     tags: list[str]
+    source_fingerprint: str | None = None

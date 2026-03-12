@@ -26,6 +26,36 @@ class LifeStorage:
                     category TEXT NOT NULL,
                     summary TEXT NOT NULL,
                     payload TEXT NOT NULL,
+                    tags TEXT,
+                    source_fingerprint TEXT
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_life_master_category ON life_master(category)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_life_master_fingerprint ON life_master(source_fingerprint)")
+            conn.commit()
+
+    def ingest(
+        self,
+        category: str,
+        summary: str,
+        payload: dict[str, Any],
+        tags: list[str],
+        source_fingerprint: str | None = None,
+    ) -> int:
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO life_master (category, summary, payload, tags, source_fingerprint)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    category.strip(),
+                    summary.strip(),
+                    json.dumps(payload, ensure_ascii=False),
+                    ",".join(tags),
+                    source_fingerprint,
+                ),
                     tags TEXT
                 )
                 """
@@ -44,6 +74,43 @@ class LifeStorage:
             conn.commit()
             return int(cur.lastrowid)
 
+    def update_record(
+        self,
+        record_id: int,
+        *,
+        category: str,
+        summary: str,
+        payload: dict[str, Any],
+        tags: list[str],
+        source_fingerprint: str | None = None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE life_master
+                SET category = ?, summary = ?, payload = ?, tags = ?, source_fingerprint = ?
+                WHERE id = ?
+                """,
+                (
+                    category.strip(),
+                    summary.strip(),
+                    json.dumps(payload, ensure_ascii=False),
+                    ",".join(tags),
+                    source_fingerprint,
+                    record_id,
+                ),
+            )
+            conn.commit()
+
+    def find_by_fingerprint(self, source_fingerprint: str) -> sqlite3.Row | None:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT id, timestamp, category, summary, payload, tags, source_fingerprint FROM life_master WHERE source_fingerprint = ? ORDER BY id DESC LIMIT 1",
+                (source_fingerprint,),
+            ).fetchone()
+
+    def fetch_records(self, category: str | None = None, limit: int | None = None) -> list[sqlite3.Row]:
+        query = "SELECT id, timestamp, category, summary, payload, tags, source_fingerprint FROM life_master"
     def fetch_records(self, category: str | None = None, limit: int | None = None) -> list[sqlite3.Row]:
         query = "SELECT id, timestamp, category, summary, payload, tags FROM life_master"
         params: list[Any] = []

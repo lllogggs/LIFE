@@ -25,6 +25,29 @@ def build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--sum", required=True, help="One-line summary")
     ingest.add_argument("--data", required=True, help="JSON payload object")
     ingest.add_argument("--tags", default="", help="Comma-separated tags")
+    ingest.add_argument(
+        "--on-duplicate",
+        default="insert",
+        choices=["skip", "update", "insert"],
+        help="Dedup policy when source fingerprint already exists",
+    )
+    ingest.add_argument("--fingerprint", default=None, help="Optional source fingerprint")
+
+    ingest_raw = subparsers.add_parser("ingest-raw", help="Ingest unstructured input and normalize automatically")
+    ingest_raw.add_argument(
+        "--source-type",
+        required=True,
+        choices=["text", "image", "excel"],
+        help="Source type for normalization",
+    )
+    ingest_raw.add_argument("--text", default=None, help="Raw free-form text input")
+    ingest_raw.add_argument("--file", dest="file_path", default=None, help="File path for image/excel sources")
+    ingest_raw.add_argument(
+        "--on-duplicate",
+        default="insert",
+        choices=["skip", "update", "insert"],
+        help="Dedup policy when normalized fingerprint already exists",
+    )
 
     extract = subparsers.add_parser("extract", help="Extract and flatten records")
     extract.add_argument("--cat", default=None, help="Optional category filter")
@@ -55,6 +78,17 @@ def main() -> None:
                 summary=args.sum,
                 payload=payload,
                 tags=normalize_tags(args.tags),
+                source_fingerprint=args.fingerprint,
+                on_duplicate=args.on_duplicate,
+            )
+            emit(result)
+
+        if args.command == "ingest-raw":
+            result = app.ingest_raw(
+                source_type=args.source_type,
+                text=args.text,
+                file_path=args.file_path,
+                on_duplicate=args.on_duplicate,
             )
             emit(result)
 
