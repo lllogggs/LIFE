@@ -56,6 +56,20 @@ class LifeStorage:
                     ",".join(tags),
                     source_fingerprint,
                 ),
+                    tags TEXT
+                )
+                """
+            )
+            conn.commit()
+
+    def ingest(self, category: str, summary: str, payload: dict[str, Any], tags: list[str]) -> int:
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO life_master (category, summary, payload, tags)
+                VALUES (?, ?, ?, ?)
+                """,
+                (category.strip(), summary.strip(), json.dumps(payload, ensure_ascii=False), ",".join(tags)),
             )
             conn.commit()
             return int(cur.lastrowid)
@@ -97,6 +111,8 @@ class LifeStorage:
 
     def fetch_records(self, category: str | None = None, limit: int | None = None) -> list[sqlite3.Row]:
         query = "SELECT id, timestamp, category, summary, payload, tags, source_fingerprint FROM life_master"
+    def fetch_records(self, category: str | None = None, limit: int | None = None) -> list[sqlite3.Row]:
+        query = "SELECT id, timestamp, category, summary, payload, tags FROM life_master"
         params: list[Any] = []
 
         if category:

@@ -12,6 +12,11 @@ from .utils import flatten_dict
 
 DuplicatePolicy = Literal["skip", "update", "insert"]
 
+from typing import Any
+
+from .storage import LifeStorage
+from .utils import flatten_dict
+
 
 class LifeOSApp:
     def __init__(self, db_path: str | Path = "jw_life.db") -> None:
@@ -64,6 +69,8 @@ class LifeOSApp:
                 source_fingerprint=source_fingerprint,
             )
 
+    def ingest(self, *, category: str, summary: str, payload: dict[str, Any], tags: list[str]) -> dict[str, Any]:
+        record_id = self.storage.ingest(category=category, summary=summary, payload=payload, tags=tags)
         return {
             "ok": True,
             "action": "ingest",
@@ -117,6 +124,9 @@ class LifeOSApp:
             "tags": canonical["tags"],
         }
         return ingested
+
+            },
+        }
 
     def extract(
         self,
