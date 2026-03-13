@@ -150,6 +150,30 @@ class LifeStorage:
                 (limit,),
             ).fetchall()
 
+    def fetch_records(self, category: str | None = None, limit: int | None = None) -> list[sqlite3.Row]:
+        query = """
+            SELECT id, timestamp, category, summary, payload, tags, demographic_tag, source_fingerprint, synced_at
+            FROM life_master
+        """
+        params: list[Any] = []
+        clauses: list[str] = []
+
+        if category:
+            clauses.append("category = ?")
+            params.append(category.strip())
+
+        if clauses:
+            query = f"{query} WHERE {' AND '.join(clauses)}"
+
+        query = f"{query} ORDER BY id ASC"
+
+        if limit is not None:
+            query = f"{query} LIMIT ?"
+            params.append(limit)
+
+        with self._connect() as conn:
+            return conn.execute(query, params).fetchall()
+
     def mark_synced(self, ids: list[int]) -> None:
         if not ids:
             return
