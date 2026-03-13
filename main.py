@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from core import LifeOSApp
+from core.cloud import CloudConfigError, CloudRateLimitError
+from core.storage import SchemaValidationError
 from core.utils import PayloadValidationError, normalize_tags, parse_payload
 
 
@@ -19,48 +21,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", default="jw_life.db", help="SQLite database path")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("setup", help="Initialize local client identity")
 
-    ingest = subparsers.add_parser("ingest", help="Store a life event payload")
+    schema = subparsers.add_parser("schema", help="Schema registry operations")
+    schema_sub = schema.add_subparsers(dest="schema_cmd", required=True)
+
+    schema_add = schema_sub.add_parser("add", help="Add or update category schema")
+    schema_add.add_argument("--cat", required=True, help="Category name")
+    schema_add.add_argument("--schema", required=True, help="Schema JSON object")
+
+    schema_sub.add_parser("list", help="List registered schemas")
+
+    ingest = subparsers.add_parser("ingest", help="Store validated life payload")
     ingest.add_argument("--cat", required=True, help="Category name")
     ingest.add_argument("--sum", required=True, help="One-line summary")
     ingest.add_argument("--data", required=True, help="JSON payload object")
     ingest.add_argument("--tags", default="", help="Comma-separated tags")
-    ingest.add_argument(
-        "--on-duplicate",
-        default="insert",
-        choices=["skip", "update", "insert"],
-        help="Dedup policy when source fingerprint already exists",
-    )
+    ingest.add_argument("--target", default=None, help="Demographic tag")
     ingest.add_argument("--fingerprint", default=None, help="Optional source fingerprint")
 
-    ingest_raw = subparsers.add_parser("ingest-raw", help="Ingest unstructured input and normalize automatically")
-    ingest_raw.add_argument(
-        "--source-type",
-        required=True,
-        choices=["text", "image", "excel"],
-        help="Source type for normalization",
-    )
-    ingest_raw.add_argument("--text", default=None, help="Raw free-form text input")
-    ingest_raw.add_argument("--file", dest="file_path", default=None, help="File path for image/excel sources")
-    ingest_raw.add_argument(
-        "--on-duplicate",
-        default="insert",
-        choices=["skip", "update", "insert"],
-        help="Dedup policy when normalized fingerprint already exists",
-    )
+    explore = subparsers.add_parser("explore", help="Explore Supabase global stats")
+    explore.add_argument("--cat", required=True, help="Category name")
+    explore.add_argument("--target", required=True, help="Demographic tag")
 
-    extract = subparsers.add_parser("extract", help="Extract and flatten records")
-    extract.add_argument("--cat", default=None, help="Optional category filter")
-    extract.add_argument("--limit", type=int, default=None, help="Optional record limit")
-    extract.add_argument("--out", default=None, help="Optional output file path")
-    extract.add_argument(
-        "--format",
-        default="json",
-        choices=["json", "csv", "excel"],
-        help="Output format (excel writes flattened CSV for compatibility)",
-    )
-
-    subparsers.add_parser("status", help="Show category and record statistics")
+    subparsers.add_parser("sync", help="Push anonymized local telemetry to Supabase")
 
     return parser
 
@@ -71,46 +55,51 @@ def main() -> None:
     app = LifeOSApp(Path(args.db))
 
     try:
+        if args.command == "setup":
+            emit(app.setup())
+
+        if args.command == "schema":
+            if args.schema_cmd == "add":
+                emit(app.schema_add(category=args.cat, schema=parse_payload(args.schema)))
+            if args.schema_cmd == "list":
+                emit(app.schema_list())
+
         if args.command == "ingest":
-            payload = parse_payload(args.data)
-            result = app.ingest(
-                category=args.cat,
-                summary=args.sum,
-                payload=payload,
-                tags=normalize_tags(args.tags),
-                source_fingerprint=args.fingerprint,
-                on_duplicate=args.on_duplicate,
+            emit(
+                app.ingest(
+                    category=args.cat,
+                    summary=args.sum,
+                    payload=parse_payload(args.data),
+                    tags=normalize_tags(args.tags),
+                    demographic_tag=args.target,
+                    source_fingerprint=args.fingerprint,
+                )
             )
-            emit(result)
 
-        if args.command == "ingest-raw":
-            result = app.ingest_raw(
-                source_type=args.source_type,
-                text=args.text,
-                file_path=args.file_path,
-                on_duplicate=args.on_duplicate,
-            )
-            emit(result)
+        if args.command == "sync":
+            emit(app.sync())
 
-        if args.command == "extract":
-            result = app.extract(
-                category=args.cat,
-                limit=args.limit,
-                output=args.out,
-                output_format=args.format,
-            )
-            emit(result)
-
-        if args.command == "status":
-            emit(app.status())
+        if args.command == "explore":
+            emit(app.explore(category=args.cat, demographic_tag=args.target))
 
         emit({"ok": False, "error": "unknown command"}, exit_code=2)
-    except PayloadValidationError as exc:
+    except (PayloadValidationError, SchemaValidationError, CloudConfigError) as exc:
         emit(
             {
                 "ok": False,
                 "error": {
-                    "type": "PayloadValidationError",
+                    "type": exc.__class__.__name__,
+                    "message": str(exc),
+                },
+            },
+            exit_code=1,
+        )
+    except CloudRateLimitError as exc:
+        emit(
+            {
+                "ok": False,
+                "error": {
+                    "type": "RateLimitExceeded",
                     "message": str(exc),
                 },
             },
