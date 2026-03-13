@@ -40,6 +40,10 @@ def build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--target", default=None, help="Demographic tag")
     ingest.add_argument("--fingerprint", default=None, help="Optional source fingerprint")
 
+    extract = subparsers.add_parser("extract", help="Extract local records as CSV")
+    extract.add_argument("--cat", default=None, help="Category name")
+    extract.add_argument("--out", required=True, help="Output CSV path")
+
     explore = subparsers.add_parser("explore", help="Explore Supabase global stats")
     explore.add_argument("--cat", required=True, help="Category name")
     explore.add_argument("--target", required=True, help="Demographic tag")
@@ -81,6 +85,9 @@ def main() -> None:
 
         if args.command == "explore":
             emit(app.explore(category=args.cat, demographic_tag=args.target))
+
+        if args.command == "extract":
+            emit(app.extract(category=args.cat, out=args.out))
 
         emit({"ok": False, "error": "unknown command"}, exit_code=2)
     except (PayloadValidationError, SchemaValidationError, CloudConfigError) as exc:

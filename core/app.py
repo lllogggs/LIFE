@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any
 
 from .cloud import CloudSync
 from .storage import LifeStorage
+from .utils import flatten_dict
 
 
 class LifeOSApp:
@@ -108,5 +110,51 @@ class LifeOSApp:
                 "demographic_tag": demographic_tag,
                 "count": len(stats),
                 "stats": stats,
+            },
+        }
+
+    def extract(self, *, category: str | None, out: str) -> dict[str, Any]:
+        rows = self.storage.fetch_records(category=category)
+
+        flattened_rows: list[dict[str, Any]] = []
+        fieldnames: list[str] = ["id", "timestamp", "category", "summary", "tags", "demographic_tag", "source_fingerprint", "synced_at"]
+        fieldset = set(fieldnames)
+        for row in rows:
+            payload = json.loads(str(row["payload"]))
+            flat_payload = flatten_dict(payload)
+            record: dict[str, Any] = {
+                "id": row["id"],
+                "timestamp": row["timestamp"],
+                "category": row["category"],
+                "summary": row["summary"],
+                "tags": row["tags"],
+                "demographic_tag": row["demographic_tag"],
+                "source_fingerprint": row["source_fingerprint"],
+                "synced_at": row["synced_at"],
+            }
+
+            for key, value in flat_payload.items():
+                column = f"payload.{key}"
+                record[column] = value
+                if column not in fieldset:
+                    fieldset.add(column)
+                    fieldnames.append(column)
+
+            flattened_rows.append(record)
+
+        output_path = Path(out)
+        with output_path.open("w", encoding="utf-8", newline="") as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+            writer.writeheader()
+            for record in flattened_rows:
+                writer.writerow(record)
+
+        return {
+            "ok": True,
+            "action": "extract",
+            "data": {
+                "category": category,
+                "count": len(flattened_rows),
+                "output": str(output_path),
             },
         }
