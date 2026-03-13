@@ -6,11 +6,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core import LifeOSApp
+from cli.core import LifeOSApp
 
 SUPPORTED_IMAGE = {".png", ".jpg", ".jpeg", ".webp"}
 SUPPORTED_EXCEL = {".csv", ".xlsx", ".xlsm", ".xltx"}
