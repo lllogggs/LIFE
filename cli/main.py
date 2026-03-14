@@ -5,10 +5,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from core import LifeOSApp
-from core.cloud import CloudConfigError, CloudRateLimitError
-from core.storage import SchemaValidationError
-from core.utils import PayloadValidationError, normalize_tags, parse_payload
+from cli.core import LifeOSApp
+from cli.core.cloud import CloudConfigError, CloudRateLimitError
+from cli.core.storage import SchemaValidationError
+from cli.core.utils import PayloadValidationError, normalize_tags, parse_payload
 
 
 def emit(response: dict[str, Any], exit_code: int = 0) -> None:
@@ -44,11 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
     extract.add_argument("--cat", default=None, help="Category name")
     extract.add_argument("--out", required=True, help="Output CSV path")
 
-    explore = subparsers.add_parser("explore", help="Explore Supabase global stats")
+    explore = subparsers.add_parser("explore", help="Explore global stats from jw-life server")
     explore.add_argument("--cat", required=True, help="Category name")
     explore.add_argument("--target", required=True, help="Demographic tag")
 
-    subparsers.add_parser("sync", help="Push anonymized local telemetry to Supabase")
+    subparsers.add_parser("sync", help="Push anonymized local telemetry to jw-life server")
 
     return parser
 
